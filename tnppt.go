@@ -13,11 +13,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type PayloadFormat struct {
-	Hash  string `json:"TNPPT_HASH" binding:"required"`
-	Time  int64  `json:"TNPPT_TIME" binding:"required"`
-	TTL   string `json:"TNPPT_TTL" binding:"required"`
-	Login string `json:"TNPPT_LOGIN" binding:"required"`
+type PayloadHMACFormat struct {
+	Hash  string `header:"HMAC_HASH" binding:"required"`
+	Time  int64  `header:"HMAC_TIME" binding:"required"`
+	Login string `header:"HMAC_LOGIN" binding:"required"`
+}
+
+type PayloadAPIKeyFormat struct {
+	APIKey string `header:"API_KEY" binding:"required"`
 }
 
 type UserInfo struct {
@@ -29,17 +32,20 @@ type Security struct {
 	TTL          int64
 	TimeReceived int64
 }
+
 type TNPPT struct {
-	Payload        PayloadFormat
-	Security       Security
-	UserInfo       UserInfo
-	IsLoginValid   bool
-	gin            *gin.Context
-	FetchUserInfos func(tnppt *TNPPT) bool
+	PayloadHMAC        PayloadHMACFormat
+	PayloadAPIKey      PayloadAPIKeyFormat
+	Security           Security
+	UserInfo           UserInfo
+	IsLoginValid       bool
+	gin                *gin.Context
+	IsCredentialsValid func(tnppt *TNPPT) bool
 }
 
 var (
 	ErrFailedAuthentication = errors.New("incorrect Username or Password")
+	ErrFailedPayload        = errors.New("incorrect Headers")
 	ErrFailedTTL            = errors.New("TTL obsolete")
 )
 
@@ -47,15 +53,16 @@ func New(tnppt *TNPPT) (*TNPPT, error) {
 	return tnppt.Init()
 }
 
-func (tnppt *TNPPT) Activate() gin.HandlerFunc {
+func (tnppt *TNPPT) ActivateHMACAuth() gin.HandlerFunc {
 	return func(ginEngine *gin.Context) {
 		tnppt.setTime()
-		tnppt.gin = ginEngine
-		if err := tnppt.checkPayload(); err != nil {
-			tnppt.sendError(http.StatusBadRequest, err)
+		tnppt.gin = ginEngine.Copy()
+		if err := tnppt.checkHMACPayload(); err != nil {
+			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
+			tnppt.sendError(http.StatusBadRequest, message)
 			return
 		}
-		if !tnppt.FetchUserInfos(tnppt) {
+		if !tnppt.IsCredentialsValid(tnppt) {
 			tnppt.sendError(http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
@@ -71,9 +78,26 @@ func (tnppt *TNPPT) Activate() gin.HandlerFunc {
 	}
 }
 
+func (tnppt *TNPPT) ActivateApiKeyAuth() gin.HandlerFunc {
+	return func(ginEngine *gin.Context) {
+		tnppt.setTime()
+		tnppt.gin = ginEngine.Copy()
+		if err := tnppt.checkAPIKeyPayload(); err != nil {
+			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
+			tnppt.sendError(http.StatusBadRequest, message)
+			return
+		}
+		if !tnppt.IsCredentialsValid(tnppt) {
+			tnppt.sendError(http.StatusUnauthorized, ErrFailedAuthentication)
+			return
+		}
+		tnppt.next()
+	}
+}
+
 func (tnppt *TNPPT) Init() (*TNPPT, error) {
 	tnppt.IsLoginValid = false
-	if tnppt.FetchUserInfos == nil {
+	if tnppt.IsCredentialsValid == nil {
 		return nil, errors.New("TNPPT - You need to set the FetchUsersInfos")
 	}
 	if tnppt.Security.TTL == 0 {
@@ -82,8 +106,13 @@ func (tnppt *TNPPT) Init() (*TNPPT, error) {
 	return tnppt, nil
 }
 
-func (tnppt *TNPPT) checkPayload() error {
-	errBind := crunchyTools.HasError(tnppt.gin.BindJSON(&tnppt.Payload), "TNPPT - INIT - Parsing Json", true)
+func (tnppt *TNPPT) checkHMACPayload() error {
+	errBind := crunchyTools.HasError(tnppt.gin.BindHeader(&tnppt.PayloadHMAC), "TNPPT - INIT - Parsing Json", true)
+	return errBind
+}
+
+func (tnppt *TNPPT) checkAPIKeyPayload() error {
+	errBind := crunchyTools.HasError(tnppt.gin.BindHeader(&tnppt.PayloadAPIKey), "TNPPT - INIT - Parsing Json", true)
 	return errBind
 }
 
@@ -95,8 +124,9 @@ func (tnppt *TNPPT) LoginDoestNotExists() {
 }
 
 func (tnppt *TNPPT) sendError(statusCode int, errorFetch error) {
+	//TODO LOG SERVER SIDE ERRORS WITHIN LOGGER
 	_ = tnppt.gin.AbortWithError(statusCode, errorFetch)
-	tnppt.gin.JSON(http.StatusUnauthorized, gin.H{
+	tnppt.gin.JSON(statusCode, gin.H{
 		"code":    statusCode,
 		"message": errorFetch.Error(),
 	})
@@ -106,12 +136,16 @@ func (tnppt *TNPPT) next() {
 	tnppt.gin.Next()
 }
 
+func (tnppt *TNPPT) GetTimeMilliseconds() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
 func (tnppt *TNPPT) setTime() {
-	tnppt.Security.TimeReceived = time.Now().UnixNano() / int64(time.Millisecond)
+	tnppt.Security.TimeReceived = tnppt.GetTimeMilliseconds()
 }
 
 func (tnppt *TNPPT) validateTTL() bool {
-	if tnppt.Security.TimeReceived-tnppt.Payload.Time <= tnppt.Security.TTL {
+	if tnppt.Security.TimeReceived-tnppt.PayloadHMAC.Time <= tnppt.Security.TTL {
 		return true
 	}
 	return false
@@ -119,7 +153,7 @@ func (tnppt *TNPPT) validateTTL() bool {
 
 func (tnppt *TNPPT) createHash() string {
 	hasher := sha256.New()
-	hashPayload := tnppt.UserInfo.Login + tnppt.UserInfo.Password + strconv.FormatInt(tnppt.Payload.Time, 10)
+	hashPayload := tnppt.UserInfo.Login + tnppt.UserInfo.Password + strconv.FormatInt(tnppt.PayloadHMAC.Time, 10)
 	hasher.Write([]byte(hashPayload))
 	hash := hasher.Sum(nil)
 	return fmt.Sprintf("%x", hash)
@@ -127,7 +161,7 @@ func (tnppt *TNPPT) createHash() string {
 
 func (tnppt *TNPPT) compareHash() bool {
 	generatedHash := tnppt.createHash()
-	if isSame := strings.Compare(generatedHash, tnppt.Payload.Hash); isSame == 0 {
+	if isSame := strings.Compare(generatedHash, tnppt.PayloadHMAC.Hash); isSame == 0 {
 		return true
 	}
 	return false
