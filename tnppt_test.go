@@ -87,7 +87,7 @@ func TestTNPPT_createHash(t *testing.T) {
 				PayloadHMAC:        tt.fields.Payload,
 				UserInfo:           tt.fields.UserInfo,
 				IsLoginValid:       tt.fields.IsLoginValid,
-				gin:                tt.fields.gin,
+				Gin:                tt.fields.gin,
 				IsCredentialsValid: tt.fields.FetchUserInfos,
 			})
 			if err != nil {
@@ -163,7 +163,7 @@ func TestTNPPT_compareHash(t *testing.T) {
 				PayloadHMAC:        tt.fields.Payload,
 				UserInfo:           tt.fields.UserInfo,
 				IsLoginValid:       tt.fields.IsLoginValid,
-				gin:                tt.fields.gin,
+				Gin:                tt.fields.gin,
 				IsCredentialsValid: tt.fields.FetchUserInfos,
 			})
 			if err != nil {
@@ -189,7 +189,7 @@ func TestTNPPT_getTime(t *testing.T) {
 		PayloadHMAC:  PayloadHMACFormat{},
 		UserInfo:     UserInfo{},
 		IsLoginValid: false,
-		gin:          nil,
+		Gin:          nil,
 		IsCredentialsValid: func(tnppt *TNPPT) bool {
 			return true
 		},
@@ -277,7 +277,7 @@ func TestTNPPT_validateTTL(t *testing.T) {
 				Security:           tt.fields.Security,
 				UserInfo:           tt.fields.UserInfo,
 				IsLoginValid:       tt.fields.IsLoginValid,
-				gin:                tt.fields.gin,
+				Gin:                tt.fields.gin,
 				IsCredentialsValid: tt.fields.FetchUserInfos,
 			})
 			if err != nil {

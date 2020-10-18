@@ -1,6 +1,6 @@
-### TuNePeuxPasTest (tnppt) v1.1.0
+### TuNePeuxPasTest (tnppt) v1.1.1
 
-... is a gin-middleware for a light and efficient HMAC auth
+... is a gin-middleware for a light and efficient HMAC and API_KEY auth
 
 -----
 

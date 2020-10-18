@@ -39,7 +39,7 @@ type TNPPT struct {
 	Security           Security
 	UserInfo           UserInfo
 	IsLoginValid       bool
-	gin                *gin.Context
+	Gin                *gin.Context
 	IsCredentialsValid func(tnppt *TNPPT) bool
 }
 
@@ -56,22 +56,22 @@ func New(tnppt *TNPPT) (*TNPPT, error) {
 func (tnppt *TNPPT) ActivateHMACAuth() gin.HandlerFunc {
 	return func(ginEngine *gin.Context) {
 		tnppt.setTime()
-		tnppt.gin = ginEngine.Copy()
+		tnppt.Gin = ginEngine.Copy()
 		if err := tnppt.checkHMACPayload(); err != nil {
 			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
-			tnppt.sendError(http.StatusBadRequest, message)
+			tnppt.sendError(ginEngine, http.StatusBadRequest, message)
 			return
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
-			tnppt.sendError(http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
 		if !tnppt.compareHash() {
-			tnppt.sendError(http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
 		if !tnppt.validateTTL() {
-			tnppt.sendError(http.StatusUnauthorized, ErrFailedTTL)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedTTL)
 			return
 		}
 		tnppt.next()
@@ -81,14 +81,14 @@ func (tnppt *TNPPT) ActivateHMACAuth() gin.HandlerFunc {
 func (tnppt *TNPPT) ActivateApiKeyAuth() gin.HandlerFunc {
 	return func(ginEngine *gin.Context) {
 		tnppt.setTime()
-		tnppt.gin = ginEngine.Copy()
+		tnppt.Gin = ginEngine.Copy()
 		if err := tnppt.checkAPIKeyPayload(); err != nil {
 			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
-			tnppt.sendError(http.StatusBadRequest, message)
+			tnppt.sendError(ginEngine, http.StatusBadRequest, message)
 			return
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
-			tnppt.sendError(http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
 		tnppt.next()
@@ -107,13 +107,20 @@ func (tnppt *TNPPT) Init() (*TNPPT, error) {
 }
 
 func (tnppt *TNPPT) checkHMACPayload() error {
-	errBind := crunchyTools.HasError(tnppt.gin.BindHeader(&tnppt.PayloadHMAC), "TNPPT - INIT - Parsing Json", true)
-	return errBind
+	if tnppt.PayloadHMAC.Login != "" {
+		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadHMAC), "TNPPT - INIT - Parsing Json", true)
+		return errBind
+	}
+	return fmt.Errorf("[HMAC] No payload detected")
 }
 
 func (tnppt *TNPPT) checkAPIKeyPayload() error {
-	errBind := crunchyTools.HasError(tnppt.gin.BindHeader(&tnppt.PayloadAPIKey), "TNPPT - INIT - Parsing Json", true)
-	return errBind
+	if tnppt.PayloadAPIKey.APIKey != "" {
+		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadAPIKey), "TNPPT - INIT - Parsing Json", true)
+		return errBind
+	}
+	return fmt.Errorf("[HMAC] No payload detected")
+
 }
 
 func (tnppt *TNPPT) LoginExists() {
@@ -123,17 +130,17 @@ func (tnppt *TNPPT) LoginDoestNotExists() {
 	tnppt.IsLoginValid = false
 }
 
-func (tnppt *TNPPT) sendError(statusCode int, errorFetch error) {
+func (tnppt *TNPPT) sendError(ginEngine *gin.Context, statusCode int, errorFetch error) {
 	//TODO LOG SERVER SIDE ERRORS WITHIN LOGGER
-	_ = tnppt.gin.AbortWithError(statusCode, errorFetch)
-	tnppt.gin.JSON(statusCode, gin.H{
+	_ = ginEngine.AbortWithError(statusCode, errorFetch)
+	ginEngine.JSON(statusCode, gin.H{
 		"code":    statusCode,
 		"message": errorFetch.Error(),
 	})
 }
 
 func (tnppt *TNPPT) next() {
-	tnppt.gin.Next()
+	tnppt.Gin.Next()
 }
 
 func (tnppt *TNPPT) GetTimeMilliseconds() int64 {
