@@ -107,7 +107,7 @@ func (tnppt *TNPPT) Init() (*TNPPT, error) {
 }
 
 func (tnppt *TNPPT) checkHMACPayload() error {
-	if tnppt.PayloadHMAC.Login != "" {
+	if tnppt.Gin.GetHeader("HMAC_LOGIN") != "" {
 		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadHMAC), "TNPPT - INIT - Parsing Json", true)
 		return errBind
 	}
@@ -115,7 +115,7 @@ func (tnppt *TNPPT) checkHMACPayload() error {
 }
 
 func (tnppt *TNPPT) checkAPIKeyPayload() error {
-	if tnppt.PayloadAPIKey.APIKey != "" {
+	if tnppt.Gin.GetHeader("API_KEY") != "" {
 		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadAPIKey), "TNPPT - INIT - Parsing Json", true)
 		return errBind
 	}
