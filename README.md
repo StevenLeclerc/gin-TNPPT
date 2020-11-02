@@ -1,4 +1,4 @@
-### TuNePeuxPasTest (tnppt) v1.1.2
+### TuNePeuxPasTest (tnppt) v1.2.0
 
 ... is a gin-middleware for a light and efficient HMAC and API_KEY auth
 
@@ -109,4 +109,17 @@ func POSTLog(engine *gin.Engine) gin.IRoutes {
 		engine.JSON(200, "")
 	})
 }
+```
+
+-------------------------------
+
+####FakeAPI
+
+You can fake the HMAC auth and the APiKey auth using :
+
+```go
+auth := authServices.GetFAKEAuthHAMCMiddleware()
+id, _ := primitive.ObjectIDFromHex("5f8214530fd2dc23dbb05d17")
+
+	return engine.GET("/log", auth.ActivateHMACAuthFake(), func(engine *gin.Context) ...
 ```

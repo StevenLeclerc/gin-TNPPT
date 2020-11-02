@@ -24,6 +24,7 @@ type PayloadAPIKeyFormat struct {
 }
 
 type UserInfo struct {
+	ID       interface{}
 	Login    string
 	Password string
 }
@@ -53,20 +54,35 @@ func New(tnppt *TNPPT) (*TNPPT, error) {
 	return tnppt.Init()
 }
 
+func NewFake(tnppt *TNPPT) (*TNPPT, error) {
+	return tnppt.InitFake()
+}
+
+func (tnppt *TNPPT) ActivateHMACAuthFake(id interface{}) gin.HandlerFunc {
+	return func(ginEngine *gin.Context) {
+		tnppt.setTime()
+		tnppt.Gin = ginEngine.Copy()
+		tnppt.UserInfo.ID = id
+		tnppt.next()
+	}
+}
+
 func (tnppt *TNPPT) ActivateHMACAuth() gin.HandlerFunc {
 	return func(ginEngine *gin.Context) {
 		tnppt.setTime()
 		tnppt.Gin = ginEngine.Copy()
 		if err := tnppt.checkHMACPayload(); err != nil {
 			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
-			tnppt.sendError(ginEngine, http.StatusBadRequest, message)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, message)
 			return
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
+			fmt.Println("user not found")
 			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
 		if !tnppt.compareHash() {
+			fmt.Println("incorrect hash")
 			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
 			return
 		}
@@ -84,7 +100,7 @@ func (tnppt *TNPPT) ActivateApiKeyAuth() gin.HandlerFunc {
 		tnppt.Gin = ginEngine.Copy()
 		if err := tnppt.checkAPIKeyPayload(); err != nil {
 			message := errors.New(ErrFailedPayload.Error() + " - " + err.Error())
-			tnppt.sendError(ginEngine, http.StatusBadRequest, message)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, message)
 			return
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
@@ -106,8 +122,19 @@ func (tnppt *TNPPT) Init() (*TNPPT, error) {
 	return tnppt, nil
 }
 
+func (tnppt *TNPPT) InitFake() (*TNPPT, error) {
+	tnppt.IsLoginValid = true
+	return tnppt, nil
+}
+
 func (tnppt *TNPPT) checkHMACPayload() error {
-	if tnppt.Gin.GetHeader("HMAC_LOGIN") != "" {
+	if tnppt.Gin.GetHeader("HMAC_LOGIN") != "" &&
+		tnppt.Gin.GetHeader("HMAC_HASH") != "" &&
+		tnppt.Gin.GetHeader("HMAC_TIME") != "" {
+		_, errTime := strconv.Atoi(tnppt.Gin.GetHeader("HMAC_TIME"))
+		if errTime != nil {
+			return fmt.Errorf("[HMAC] Incorrect Payload")
+		}
 		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadHMAC), "TNPPT - INIT - Parsing Json", true)
 		return errBind
 	}
