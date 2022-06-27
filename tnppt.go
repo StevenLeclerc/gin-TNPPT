@@ -45,9 +45,10 @@ type TNPPT struct {
 }
 
 var (
-	ErrFailedAuthentication = errors.New("incorrect Username or Password")
-	ErrFailedPayload        = errors.New("incorrect Headers")
-	ErrFailedTTL            = errors.New("TTL obsolete")
+	ErrFailedAuthenticationAPIKEY = errors.New("incorrect API-Key")
+	ErrFailedAuthenticationHMAC   = errors.New("incorrect Username or Password")
+	ErrFailedPayload              = errors.New("incorrect Headers")
+	ErrFailedTTL                  = errors.New("TTL obsolete")
 )
 
 func New(tnppt *TNPPT) (*TNPPT, error) {
@@ -78,12 +79,12 @@ func (tnppt *TNPPT) ActivateHMACAuth() gin.HandlerFunc {
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
 			fmt.Println("user not found")
-			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthenticationHMAC)
 			return
 		}
 		if !tnppt.compareHash() {
 			fmt.Println("incorrect hash")
-			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthenticationHMAC)
 			return
 		}
 		if !tnppt.validateTTL() {
@@ -104,7 +105,7 @@ func (tnppt *TNPPT) ActivateApiKeyAuth() gin.HandlerFunc {
 			return
 		}
 		if !tnppt.IsCredentialsValid(tnppt) {
-			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthentication)
+			tnppt.sendError(ginEngine, http.StatusUnauthorized, ErrFailedAuthenticationAPIKEY)
 			return
 		}
 		tnppt.next()
@@ -114,7 +115,7 @@ func (tnppt *TNPPT) ActivateApiKeyAuth() gin.HandlerFunc {
 func (tnppt *TNPPT) Init() (*TNPPT, error) {
 	tnppt.IsLoginValid = false
 	if tnppt.IsCredentialsValid == nil {
-		return nil, errors.New("TNPPT - You need to set the FetchUsersInfos")
+		return nil, errors.New("TNPPT - You need to set the IsCredentialsValid function")
 	}
 	if tnppt.Security.TTL == 0 {
 		tnppt.Security.TTL = 800
@@ -146,7 +147,7 @@ func (tnppt *TNPPT) checkAPIKeyPayload() error {
 		errBind := crunchyTools.HasError(tnppt.Gin.BindHeader(&tnppt.PayloadAPIKey), "TNPPT - INIT - Parsing Json", true)
 		return errBind
 	}
-	return fmt.Errorf("[HMAC] No payload detected")
+	return fmt.Errorf("[API-KEY] No payload detected")
 
 }
 
