@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	crunchyTools "github.com/crunchy-apps/crunchy-tools"
+	crunchyTools "github.com/StevenLeclerc/crunchy-tools"
 	"github.com/gin-gonic/gin"
 )
 
